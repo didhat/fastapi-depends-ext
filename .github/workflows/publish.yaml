@@ -21,6 +21,7 @@ jobs:
         run: python3 -m pip install --upgrade build
       - name: Build archive
         run: |
+          ls
           python3 -m build
       - name: Publish package distributions to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
