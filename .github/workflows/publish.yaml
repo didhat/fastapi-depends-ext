@@ -18,7 +18,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install Depends
-        run: python3 -m pip install --upgrade build && poetry build
+        run: python3 -m pip install --upgrade build
       - name: Build archive
         run: |
           python3 -m build
