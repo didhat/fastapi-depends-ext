@@ -105,4 +105,7 @@ def resource(dep):
         _resource_cacher.add_cache_depends(dep, res)
         return res
 
+    wrapper.__name__ = dep.__name__
+    wrapper.__module__ = dep.__module__
+
     return wrapper
