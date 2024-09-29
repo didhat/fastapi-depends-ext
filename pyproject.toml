@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "extdepends"
+name = "fastapi-depends-extension"
 version = "0.1.0"
 description = ""
 authors = ["Daniil Solynin <solynynd@gmail.com>"]
