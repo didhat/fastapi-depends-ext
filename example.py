@@ -72,8 +72,8 @@ async def async_context_manager_dep(settings=Depends(setting)):
 
 
 @resource
-def once_randomly_generated_resource():
-    return random.randint(1, 10000)
+def once_randomly_generated_resource(max_num: int):
+    return random.randint(1, max_num)
 
 
 @resource
