@@ -17,8 +17,10 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Build
-        run: python3 -m pip install --upgrade poetry && poetry build
-
+      - name: Install Depends
+        run: python3 -m pip install --upgrade build && poetry build
+      - name: Build archive
+        run: |
+          python3 -m build
       - name: Publish package distributions to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
