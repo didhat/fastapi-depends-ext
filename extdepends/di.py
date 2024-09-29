@@ -4,7 +4,7 @@ import inspect
 
 from extdepends.merge_args import merge_args
 from fastapi import FastAPI, Depends
-from contextlib import AsyncExitStack, suppress
+from contextlib import AsyncExitStack, suppress, asynccontextmanager
 
 
 class GeneratorExitCollector:
@@ -58,6 +58,7 @@ def setup_extend_di(app: FastAPI):
     app.dependency_overrides[_resources_cache_di] = lambda: resource_cacher
 
 
+@asynccontextmanager
 async def on_di_shutdown(app: FastAPI):
     yield
     async_generator_collector: GeneratorExitCollector = app.dependency_overrides[_async_generator_calls]()
