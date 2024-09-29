@@ -1,6 +1,6 @@
 ## Fastapi depends extension
 
-[![PyPI version](https://badge.fury.io/py/fastapi-depends-extension.svg)](https://pypi.python.org/pypi/fastapi-depends-extension)
+![PyPI - Version](https://img.shields.io/pypi/v/fastapi-depends-extension?color=green)
 [![Supported versions](https://img.shields.io/pypi/pyversions/fastapi-depends-extension.svg)](https://pypi.python.org/pypi/fastapi-depends-extension)
 [![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/didhat/fastapi-depends-ext/github-ci.yml)](https://github.com/reagento/dishka/actions)
 
