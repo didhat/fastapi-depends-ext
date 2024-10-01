@@ -1,10 +1,9 @@
 import inspect
 from contextlib import AsyncExitStack, asynccontextmanager, contextmanager
-from functools import wraps
 from typing import ContextManager, AsyncContextManager, List, Union
+from functools import wraps
 
 from fastapi import FastAPI, Depends
-
 
 class ResourceContainer:
 
@@ -19,12 +18,12 @@ class ResourceContainer:
 
     @staticmethod
     def _manager_from(provider, deps):
-        manager = None
         if inspect.isgeneratorfunction(provider):
             manager = contextmanager(provider)(**deps)
         elif inspect.isasyncgenfunction(provider):
             manager = asynccontextmanager(provider)(**deps)
-
+        else:
+            manager = provider(**deps)
         return manager
 
     async def _instance_from(self, provider, deps):
@@ -35,23 +34,14 @@ class ResourceContainer:
             instance = await self._exit_stack.enter_async_context(manager)
         elif isinstance(manager, ContextManager):
             instance = self._exit_stack.enter_context(manager)
-        elif inspect.iscoroutinefunction(provider):
-            instance = await provider(**deps)
-            if isinstance(instance, AsyncContextManager):
-                instance = await self._exit_stack.enter_async_context(instance)
-        elif inspect.isfunction(provider):
-            instance = provider(**deps)
-            if isinstance(instance, ContextManager):
-                instance = self._exit_stack.enter_context(instance)
-            elif isinstance(instance, AsyncContextManager):
-                instance = await self._exit_stack.enter_async_context(instance)
+        elif inspect.isawaitable(manager):
+            instance = await manager
         else:
-            raise ValueError("resource can be generator, contextmanager or function")
+            instance = manager
 
         return instance
 
     async def __call__(self, provider, deps):
-
         key = self._provider_key(provider)
         instance = self._instances.get(key)
         if instance:
@@ -93,10 +83,10 @@ def resource(provider):
         params.append(param)
         func.__signature__ = sig.replace(parameters=params)
 
-    add_arg(provider, '_container', Depends(ResourceContainer))
-
     @wraps(provider)
     async def wrapper(_container, **deps):
         return await _container(provider, deps)
+
+    add_arg(wrapper, '_container', Depends(ResourceContainer))
 
     return wrapper
