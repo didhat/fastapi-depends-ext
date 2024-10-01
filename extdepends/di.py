@@ -5,6 +5,7 @@ from functools import wraps
 
 from fastapi import FastAPI, Depends
 
+
 class ResourceContainer:
 
     def __init__(self):
