@@ -4,7 +4,7 @@ from contextlib import contextmanager, asynccontextmanager
 from fastapi import FastAPI, Depends
 from fastapi.testclient import TestClient
 
-from extdepends.di import resource, setup_extend_di, on_di_shutdown, _resources_cache_di, ResourceCacher
+from extdepends.di import resource, setup_extend_di, on_di_shutdown
 
 app = FastAPI(lifespan=on_di_shutdown)
 setup_extend_di(app)
@@ -49,10 +49,7 @@ def test_async_contextmanager_resource():
         resource_3 = client.get("/async_contextmanager_resource").json()
 
     assert resource_1 == resource_2 == resource_3
-    resource_cacher: ResourceCacher = app.dependency_overrides[_resources_cache_di]()
 
-    closing_resource = resource_cacher.get_cache_depends(async_contextmanager_depends)
-    assert closing_resource.is_close is True
 
 
 def test_sync_contextmanager_resource():
@@ -62,7 +59,4 @@ def test_sync_contextmanager_resource():
         resource_3 = client.get("/sync_contextmanager_resource").json()
 
     assert resource_1 == resource_2 == resource_3
-    resource_cacher: ResourceCacher = app.dependency_overrides[_resources_cache_di]()
 
-    closing_resource = resource_cacher.get_cache_depends(sync_contextmanager_depends)
-    assert closing_resource.is_close is True

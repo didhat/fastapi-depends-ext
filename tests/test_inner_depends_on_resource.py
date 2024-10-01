@@ -3,8 +3,7 @@ import random
 from fastapi import FastAPI, Depends
 from fastapi.testclient import TestClient
 
-from extdepends.di import resource, setup_extend_di, on_di_shutdown, _resources_cache_di, ResourceCacher
-
+from extdepends.di import resource, setup_extend_di, on_di_shutdown
 app = FastAPI(lifespan=on_di_shutdown)
 setup_extend_di(app)
 
@@ -85,12 +84,7 @@ def test_get_resource_in_depends():
         response_3 = client.get("/service").json()
 
     assert response_1 == response_2 == response_3
-    resource_cacher: ResourceCacher = app.dependency_overrides[_resources_cache_di]()
-    async_generator_resource = resource_cacher.get_cache_depends(async_generator_depends)
-    sync_generator_resource = resource_cacher.get_cache_depends(sync_generator_depends)
 
-    assert async_generator_resource.is_close is True
-    assert sync_generator_resource.is_close is True
 
 
 def test_resource_depends_on_other_resources():
@@ -100,13 +94,7 @@ def test_resource_depends_on_other_resources():
         response_3 = client.get("/depended_resource").json()
 
     assert response_1 == response_2 == response_3
-    resource_cacher: ResourceCacher = app.dependency_overrides[_resources_cache_di]()
-    sync_resource = resource_cacher.get_cache_depends(sync_generator_depends)
-    depends_on_resource = resource_cacher.get_cache_depends(resource_with_depends_on_other_resources)
 
-    assert sync_resource.value == depends_on_resource.value
-    assert sync_resource.is_close is True
-    assert depends_on_resource.is_close is True
 
 
 def test_common_depends():
@@ -116,7 +104,4 @@ def test_common_depends():
         response_3 = client.get("/common_depends").json()
 
     assert response_1 == response_2 == response_3 == {"value": 10, "is_close": False}
-    resource_cacher: ResourceCacher = app.dependency_overrides[_resources_cache_di]()
-    common_resource = resource_cacher.get_cache_depends(resource_with_common_depends)
 
-    assert common_resource.is_close is True

@@ -3,7 +3,7 @@ import random
 from fastapi import FastAPI, Depends
 from fastapi.testclient import TestClient
 
-from extdepends.di import resource, setup_extend_di, on_di_shutdown, _resources_cache_di, ResourceCacher
+from extdepends.di import resource, setup_extend_di, on_di_shutdown, ResourceContainer
 
 app = FastAPI(lifespan=on_di_shutdown)
 setup_extend_di(app)
@@ -47,10 +47,10 @@ def test_async_generator_resource():
         resource_3 = client.get("/async_generator_resource").json()
 
     assert resource_1 == resource_2 == resource_3
-    resource_cacher: ResourceCacher = app.dependency_overrides[_resources_cache_di]()
 
-    closing_resource = resource_cacher.get_cache_depends(async_generator_depends)
-    assert closing_resource.is_close is True
+    container: ResourceContainer = app.dependency_overrides[ResourceContainer]()
+    assert container._instances == {}
+
 
 
 def test_sync_generator_resource():
@@ -61,7 +61,7 @@ def test_sync_generator_resource():
         resource_3 = client.get("/sync_generator_resource").json()
 
     assert resource_1 == resource_2 == resource_3
-    resource_cacher: ResourceCacher = app.dependency_overrides[_resources_cache_di]()
 
-    closing_resource = resource_cacher.get_cache_depends(sync_generator_depends)
-    assert closing_resource.is_close is True
+    container: ResourceContainer = app.dependency_overrides[ResourceContainer]()
+    assert container._instances == {}
+

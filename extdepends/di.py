@@ -1,112 +1,102 @@
-from typing import Any, ContextManager, AsyncContextManager
-import types
 import inspect
+from contextlib import AsyncExitStack, asynccontextmanager, contextmanager
+from functools import wraps
+from typing import ContextManager, AsyncContextManager, List, Union
 
-from extdepends.merge_args import merge_args
 from fastapi import FastAPI, Depends
-from contextlib import AsyncExitStack, suppress, asynccontextmanager
 
 
-class GeneratorExitCollector:
+class ResourceContainer:
+
     def __init__(self):
-        self._resources = []
 
-    def add_generator_resource(self, gen_res):
-        self._resources.append(gen_res)
+        self._exit_stack = AsyncExitStack()
+        self._instances = {}
 
-    async def close_gen_depends(self):
-        for gen in self._resources:
-            if inspect.isgenerator(gen):
-                next(gen, None)
-            elif inspect.isasyncgen(gen):
-                with suppress(StopAsyncIteration):
-                    await gen.__anext__()
+    @staticmethod
+    def _provider_key(provider):
+        return provider.__module__, provider.__name__
+
+    @staticmethod
+    def _manager_from(provider, deps):
+        manager = None
+        if inspect.isgeneratorfunction(provider):
+            manager = contextmanager(provider)(**deps)
+        elif inspect.isasyncgenfunction(provider):
+            manager = asynccontextmanager(provider)(**deps)
+
+        return manager
+
+    async def _instance_from(self, provider, deps):
+
+        manager = self._manager_from(provider, deps)
+
+        if isinstance(manager, AsyncContextManager):
+            instance = await self._exit_stack.enter_async_context(manager)
+        elif isinstance(manager, ContextManager):
+            instance = self._exit_stack.enter_context(manager)
+        elif inspect.iscoroutinefunction(provider):
+            instance = await provider(**deps)
+            if isinstance(instance, AsyncContextManager):
+                instance = await self._exit_stack.enter_async_context(instance)
+        elif inspect.isfunction(provider):
+            instance = provider(**deps)
+            if isinstance(instance, ContextManager):
+                instance = self._exit_stack.enter_context(instance)
+            elif isinstance(instance, AsyncContextManager):
+                instance = await self._exit_stack.enter_async_context(instance)
+        else:
+            raise ValueError("resource can be generator, contextmanager or function")
+
+        return instance
+
+    async def __call__(self, provider, deps):
+
+        key = self._provider_key(provider)
+        instance = self._instances.get(key)
+        if instance:
+            return instance
+
+        instance = await self._instance_from(provider, deps)
+        self._instances[key] = instance
+
+        return instance
+
+    async def aclose(self):
+        self._instances.clear()
+        await self._exit_stack.aclose()
 
 
-class ResourceCacher:
-    def __init__(self):
-        self._resources = {}
+def setup_extend_di(app: Union[FastAPI, List[FastAPI]]):
+    resource_container = ResourceContainer()
 
-    def add_cache_depends(self, func, ready_res):
-        cache_key = (func.__module__, func.__name__)
-        self._resources[cache_key] = ready_res
-
-    def get_cache_depends(self, func) -> Any:
-        cache_key = (func.__module__, func.__name__)
-        return self._resources.get(cache_key, None)
-
-
-def _async_di_exit_stack() -> AsyncExitStack:
-    raise NotImplementedError()
-
-
-def _async_generator_calls() -> GeneratorExitCollector:
-    raise NotImplementedError()
-
-
-def _resources_cache_di():
-    raise NotImplementedError()
-
-
-def setup_extend_di(app: FastAPI):
-    exit_stack = AsyncExitStack()
-    resource_cacher = ResourceCacher()
-    generator_exit_stack = GeneratorExitCollector()
-
-    app.dependency_overrides[_async_di_exit_stack] = lambda: exit_stack
-    app.dependency_overrides[_async_generator_calls] = lambda: generator_exit_stack
-    app.dependency_overrides[_resources_cache_di] = lambda: resource_cacher
+    if isinstance(app, list):
+        for a in app:
+            a.dependency_overrides[ResourceContainer] = lambda: resource_container
+    else:
+        app.dependency_overrides[ResourceContainer] = lambda: resource_container
 
 
 @asynccontextmanager
 async def on_di_shutdown(app: FastAPI):
     yield
-    async_generator_collector: GeneratorExitCollector = app.dependency_overrides[_async_generator_calls]()
-    async_exit_stack: AsyncExitStack = app.dependency_overrides[_async_di_exit_stack]()
+    container: ResourceContainer = app.dependency_overrides[ResourceContainer]()
 
-    await async_generator_collector.close_gen_depends()
-    await async_exit_stack.aclose()
+    await container.aclose()
 
 
-def resource(dep):
-    @merge_args(dep, drop_args=["args", "kwargs", "kwds"])
-    async def wrapper(*_args, _generator_finished=Depends(_async_generator_calls),
-                      _resource_cacher=Depends(_resources_cache_di),
-                      _async_context_exit_stak: AsyncExitStack = Depends(_async_di_exit_stack), **kwargs):
-        already_exist_resource = _resource_cacher.get_cache_depends(dep)
-        if already_exist_resource:
-            return already_exist_resource
+def resource(provider):
+    def add_arg(func, name, default):
+        sig = inspect.signature(func)
+        params = list(sig.parameters.values())
+        param = inspect.Parameter(name, inspect.Parameter.KEYWORD_ONLY, default=default)
+        params.append(param)
+        func.__signature__ = sig.replace(parameters=params)
 
-        if inspect.isgeneratorfunction(dep):
-            resource_gen = dep(**kwargs)
-            res = next(resource_gen, None)
-            _generator_finished.add_generator_resource(resource_gen)
-        elif inspect.isasyncgenfunction(dep):
-            resource_gen = dep(**kwargs)
-            res = await resource_gen.__anext__()
-            _generator_finished.add_generator_resource(resource_gen)
-        elif inspect.iscoroutinefunction(dep):
-            res = await dep(**kwargs)
-            if isinstance(res, AsyncContextManager):
-                res = await _async_context_exit_stak.enter_async_context(res)
-            if isinstance(res, ContextManager):
-                res = _async_context_exit_stak.enter_context(res)
-        elif inspect.isfunction(dep):
-            res = dep(**kwargs)
-            if isinstance(res, AsyncContextManager):
-                res = await _async_context_exit_stak.enter_async_context(res)
-            if isinstance(res, ContextManager):
-                res = _async_context_exit_stak.enter_context(res)
-        else:
-            raise ValueError(f"can't resolve resource {dep.__name__}, resource should be generator or context manager or function")
+    add_arg(provider, '_container', Depends(ResourceContainer))
 
-        if res is None:
-            raise ValueError(f"resource can't be None, error while init {dep.__name__} resource")
-
-        _resource_cacher.add_cache_depends(dep, res)
-        return res
-
-    wrapper.__name__ = dep.__name__
-    wrapper.__module__ = dep.__module__
+    @wraps(provider)
+    async def wrapper(_container, **deps):
+        return await _container(provider, deps)
 
     return wrapper

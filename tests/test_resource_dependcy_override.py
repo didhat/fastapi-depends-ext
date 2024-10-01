@@ -3,7 +3,7 @@ import random
 from fastapi import FastAPI, Depends
 from fastapi.testclient import TestClient
 
-from extdepends.di import resource, setup_extend_di, on_di_shutdown, _resources_cache_di, ResourceCacher
+from extdepends.di import resource, setup_extend_di, on_di_shutdown
 
 app = FastAPI(lifespan=on_di_shutdown)
 setup_extend_di(app)
