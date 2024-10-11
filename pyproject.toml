@@ -8,7 +8,7 @@ packages = [{include = "extdepends"}]
 
 [tool.poetry.dependencies]
 python = "^3.8"
-fastapi = "^0.115.0"
+fastapi = ">0.78.0"
 
 
 [tool.poetry.group.dev.dependencies]
